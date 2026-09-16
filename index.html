@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>耐久レース スティントタイマー</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --card-bg: #1a1a1a;
+            --text-color: #ffffff;
+            --accent-color: #00e676;
+            --eva-red: #ff1744;
+            --eva-orange: #ff9100;
+        }
+
+        body {
+            margin: 0;
+            padding: 16px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            /* メインフォントを極太明朝体（しっぽり明朝 Extrabold/Black）に設定 */
+            font-family: 'Shippori Mincho', serif;
+            font-weight: 900;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.8);
+        }
+
+        h1 {
+            margin: 0 0 16px 0;
+            font-size: 1.4rem;
+            text-align: center;
+            color: var(--eva-orange);
+            letter-spacing: 2px;
+        }
+
+        .input-group { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        label { font-size: 1rem; letter-spacing: 1px; }
+        input {
+            background: #262626;
+            border: 1px solid #555;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 1.1rem;
+            width: 70px;
+            text-align: center;
+            font-family: 'Share Tech Mono', monospace;
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.3rem;
+            font-weight: 900;
+            font-family: 'Shippori Mincho', serif;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            letter-spacing: 2px;
+            transition: background 0.2s;
+        }
+
+        .btn-start { background-color: var(--eva-orange); color: #000; }
+        .btn-stop { background-color: #444; color: #fff; margin-top: 15px; font-size: 1rem; }
+        .btn-ack { background-color: var(--eva-red); color: #fff; font-size: 1.6rem; display: none; margin-bottom: 12px; }
+        .btn-adjust { background-color: #00b0ff; color: #000; padding: 8px 12px; font-size: 0.9rem; width: auto; }
+
+        .timer-display { text-align: center; display: none; }
+        .label { font-size: 0.9rem; color: #aaa; margin-bottom: 4px; letter-spacing: 1px; }
+        
+        /* タイマー数値は視認性の高い等幅デジタルフォント */
+        .val-large { font-size: 3.2rem; font-family: 'Share Tech Mono', monospace; color: #fff; line-height: 1.1; }
+        .val-mid { font-size: 2.5rem; font-family: 'Share Tech Mono', monospace; color: var(--accent-color); line-height: 1.1; margin-bottom: 12px; }
+        .stint-info { font-size: 1.6rem; margin-bottom: 12px; color: var(--eva-orange); letter-spacing: 2px; }
+
+        /* ② スティント時間調整用コントロール */
+        .adjust-box {
+            background: #222;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #444;
+            margin-bottom: 16px;
+        }
+        .adjust-inputs {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        /* アラーム発生時の点滅スタイル */
+        body.alarm-active {
+            animation: blink 0.6s infinite alternate;
+        }
+        @keyframes blink {
+            0% { background-color: #0d0d0d; }
+            100% { background-color: #8b0000; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="setup-card" class="card">
+        <h1>作戦実行設定</h1>
+        <div class="input-group">
+            <label>総レース時間 (時間)</label>
+            <input type="number" id="race-hours" value="4" min="0">
+        </div>
+        <div class="input-group">
+            <label>総レース時間 (分)</label>
+            <input type="number" id="race-minutes" value="0" min="0" max="59">
+        </div>
+        <div class="input-group">
+            <label>予定スティント数</label>
+            <input type="number" id="total-stints" value="4" min="1">
+        </div>
+        <button id="start-btn" class="btn-start">計測開始</button>
+    </div>
+
+    <div id="monitor-card" class="card timer-display">
+        <div id="stint-display" class="stint-info">STINT 1 / 4</div>
+        
+        <div class="label">ピットイン指示まで</div>
+        <div id="next-alarm-timer" class="val-mid">00:00:00</div>
+        
+        <button id="ack-btn" class="btn-ack">解除 / 確認</button>
+
+        <div class="adjust-box">
+            <div class="label">現スティント予定時間変更</div>
+            <div class="adjust-inputs">
+                <input type="number" id="adj-min" placeholder="分" min="0" max="180"> 分
+                <input type="number" id="adj-sec" placeholder="秒" min="0" max="59"> 秒
+                <button id="apply-adj-btn" class="btn-adjust">適用</button>
+            </div>
+        </div>
+        
+        <hr style="border:0; border-top:1px solid #333; margin: 16px 0;">
+        
+        <div class="label">作戦終了まで</div>
+        <div id="race-remaining-timer" class="val-large">00:00:00</div>
+
+        <button id="reset-btn" class="btn-stop">タイマーリセット</button>
+    </div>
+</div>
+
+<script>
+    let timerInterval = null;
+    let audioCtx = null;
+    let alarmBeeper = null;
+    let wakeLock = null;
+
+    let startTime = 0;
+    let totalRaceSec = 0;
+    let totalStints = 0;
+    
+    // スティントごとの終了目標時間（秒）を保持する配列
+    let stintEndTimes = []; 
+
+    let currentStintIndex = 0;
+    let isAlarmTriggered = false;
+
+    const ALARM_OFFSET_SEC = 120; // 2分前アラーム
+
+    function startBeep() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (alarmBeeper) return;
+
+        alarmBeeper = setInterval(() => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth'; // エヴァ風の鋭いアラーム音に変更
+            osc.frequency.setValueAtTime(960, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15);
+        }, 400);
+    }
+
+    function stopBeep() {
+        if (alarmBeeper) {
+            clearInterval(alarmBeeper);
+            alarmBeeper = null;
+        }
+    }
+
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+        } catch (err) {}
+    }
+
+    function formatTime(sec) {
+        if (sec < 0) sec = 0;
+        const h = Math.floor(sec / 3600).toString().padStart(2, '0');
+        const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+        const s = Math.floor(sec % 60).toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    }
+
+    // スタート処理
+    document.getElementById('start-btn').addEventListener('click', () => {
+        const hrs = parseInt(document.getElementById('race-hours').value) || 0;
+        const mins = parseInt(document.getElementById('race-minutes').value) || 0;
+        totalStints = parseInt(document.getElementById('total-stints').value) || 1;
+
+        totalRaceSec = (hrs * 3600) + (mins * 60);
+        if (totalRaceSec <= 0) return alert('レース時間を正しく設定してください。');
+
+        // 各スティントの初期目標終了時間を等分割でセット
+        const baseStintDuration = totalRaceSec / totalStints;
+        stintEndTimes = [];
+        for (let i = 0; i < totalStints; i++) {
+            stintEndTimes.push((i + 1) * baseStintDuration);
+        }
+
+        startTime = Date.now();
+        currentStintIndex = 0;
+        isAlarmTriggered = false;
+
+        document.getElementById('setup-card').style.display = 'none';
+        document.getElementById('monitor-card').style.display = 'block';
+
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        requestWakeLock();
+
+        // 最初のスティント時間を調整用インプットのプレースホルダーに設定
+        updateAdjustInputPlaceholders(baseStintDuration);
+
+        timerInterval = setInterval(update, 200);
+    });
+
+    // 調整欄の初期表示更新
+    function updateAdjustInputPlaceholders(durationSec) {
+        document.getElementById('adj-min').value = Math.floor(durationSec / 60);
+        document.getElementById('adj-sec').value = Math.floor(durationSec % 60);
+    }
+
+    // ② スティント時間変更の適用ボタン処理
+    document.getElementById('apply-adj-btn').addEventListener('click', () => {
+        const inputMin = parseInt(document.getElementById('adj-min').value) || 0;
+        const inputSec = parseInt(document.getElementById('adj-sec').value) || 0;
+        const newStintDuration = (inputMin * 60) + inputSec;
+
+        if (newStintDuration <= ALARM_OFFSET_SEC) {
+            return alert('スティント時間は2分（アラーム時間）以上に設定してください。');
+        }
+
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const previousStintEndTime = currentStintIndex === 0 ? 0 : stintEndTimes[currentStintIndex - 1];
+
+        // 現在のスティントの終了予定時刻を更新
+        stintEndTimes[currentStintIndex] = previousStintEndTime + newStintDuration;
+
+        // 残りのスティント数で残りの時間を均等再分配
+        const remainingStints = totalStints - (currentStintIndex + 1);
+        if (remainingStints > 0) {
+            const remainingTimeForLater = totalRaceSec - stintEndTimes[currentStintIndex];
+            const newLaterDuration = Math.max(0, remainingTimeForLater / remainingStints);
+
+            for (let i = currentStintIndex + 1; i < totalStints; i++) {
+                stintEndTimes[i] = stintEndTimes[i - 1] + newLaterDuration;
+            }
+        }
+
+        // アラーム状態のリセット（延長した場合など）
+        if (isAlarmTriggered) {
+            document.body.classList.remove('alarm-active');
+            document.getElementById('ack-btn').style.display = 'none';
+            stopBeep();
+            isAlarmTriggered = false;
+        }
+
+        alert(`STINT ${currentStintIndex + 1} の長さを変更しました。\n以降のスティントも自動再計算されました。`);
+    });
+
+    // タイマー更新処理
+    function update() {
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const raceRemainingSec = totalRaceSec - elapsedSec;
+
+        if (raceRemainingSec <= 0) {
+            document.getElementById('race-remaining-timer').textContent = "00:00:00";
+            clearInterval(timerInterval);
+            alert("作戦時間終了（チェッカー）");
+            return;
+        }
+
+        // 自動スティント更新チェック
+        if (elapsedSec >= stintEndTimes[currentStintIndex] && currentStintIndex < totalStints - 1) {
+            currentStintIndex++;
+            isAlarmTriggered = false;
+
+            // 新しいスティントのデフォルト時間を調整欄に反映
+            const prevEnd = stintEndTimes[currentStintIndex - 1];
+            const currEnd = stintEndTimes[currentStintIndex];
+            updateAdjustInputPlaceholders(currEnd - prevEnd);
+        }
+
+        // 現在スティントのアラーム時刻（目標終了時刻の2分前）
+        const currentTargetSec = stintEndTimes[currentStintIndex];
+        const alarmTargetSec = currentTargetSec - ALARM_OFFSET_SEC;
+        const timeUntilAlarm = alarmTargetSec - elapsedSec;
+
+        // アラーム判定
+        if (timeUntilAlarm <= 0 && !isAlarmTriggered) {
+            triggerAlarm();
+        }
+
+        // 画面表示更新
+        document.getElementById('stint-display').textContent = `STINT ${currentStintIndex + 1} / ${totalStints}`;
+        document.getElementById('race-remaining-timer').textContent = formatTime(raceRemainingSec);
+        
+        if (timeUntilAlarm > 0) {
+            document.getElementById('next-alarm-timer').textContent = formatTime(timeUntilAlarm);
+        } else {
+            document.getElementById('next-alarm-timer').textContent = "00:00:00 (ピット要請
